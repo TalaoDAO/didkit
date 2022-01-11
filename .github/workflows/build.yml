@@ -10,7 +10,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  SSI_REF: c66972290377c6b4bf9b63b2dfdc047dbdcfd989
+  SSI_REF: feat/did-ion
 
 defaults:
   run:
