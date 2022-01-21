@@ -23,6 +23,10 @@ use didkit_cli::opts::ResolverOptions;
 pub enum DIDKit {
     /// Generate and output a Ed25519 keypair in JWK format
     GenerateEd25519Key,
+
+    /// Generate and output a Secp256k1 keypair in JWK format
+    GenerateSecp256k1Key,
+
     /// Output a did:key DID for a JWK. Deprecated in favor of key-to-did.
     #[structopt(setting = AppSettings::Hidden)]
     KeyToDIDKey {
@@ -355,6 +359,12 @@ fn main() {
     match opt {
         DIDKit::GenerateEd25519Key => {
             let jwk = JWK::generate_ed25519().unwrap();
+            let jwk_str = serde_json::to_string(&jwk).unwrap();
+            println!("{}", jwk_str);
+        }
+
+        DIDKit::GenerateSecp256k1Key => {
+            let jwk = JWK::generate_secp256k1().unwrap();
             let jwk_str = serde_json::to_string(&jwk).unwrap();
             println!("{}", jwk_str);
         }
