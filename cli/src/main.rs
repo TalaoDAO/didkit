@@ -3,6 +3,7 @@ use std::io::{stdin, stdout, BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use anyhow::{anyhow, Context, Result as AResult};
 use chrono::prelude::*;
 use serde::Serialize;
 use serde_json::Value;
@@ -12,7 +13,7 @@ use structopt::{clap::AppSettings, clap::ArgGroup, StructOpt};
 use did_method_key::DIDKey;
 use didkit::generate_proof;
 use didkit::{
-    dereference, get_verification_method, runtime, DIDMethod, DIDResolver,
+    dereference, get_verification_method, runtime, DIDCreate, DIDMethod, DIDResolver,
     DereferencingInputMetadata, Error, LinkedDataProofOptions, Metadata, ProofFormat, ProofPurpose,
     ResolutionInputMetadata, ResolutionResult, Source, VerifiableCredential,
     VerifiablePresentation, DID_METHODS, JWK, URI,
@@ -65,11 +66,36 @@ pub enum DIDKit {
         ssh_pk: PublicKey,
     },
 
-    /*
     // DID Functionality
     /// Create new DID Document.
-    DIDCreate {},
-    */
+    // https://identity.foundation/did-registration/#create
+    // (method), jobId, options, secret, didDocument
+    DIDCreate {
+        /// DID method name
+        method: String,
+
+        /// DID-method-specific arguments
+        args: Vec<String>,
+
+        /// JWK file for signing purposes
+        #[structopt(short, long, parse(from_os_str))]
+        signing_key: Option<PathBuf>,
+
+        /// JWK file for DID Update operations
+        #[structopt(short, long, parse(from_os_str))]
+        update_key: Option<PathBuf>,
+
+        /// JWK file for DID Recovery and/or Deactivate operations
+        #[structopt(short, long, parse(from_os_str))]
+        recovery_key: Option<PathBuf>,
+
+        #[structopt(short = "o", name = "name=value")]
+        /// Options for DID create operation
+        ///
+        /// More info: https://identity.foundation/did-registration/#options
+        options: Vec<MetadataProperty>,
+    },
+
     /// Resolve a DID to a DID Document.
     DIDResolve {
         did: String,
@@ -219,6 +245,17 @@ pub struct KeyArg {
     ssh_agent: bool,
 }
 
+fn read_jwk_file_opt(pathbuf_opt: &Option<PathBuf>) -> AResult<Option<JWK>> {
+    let pathbuf = match pathbuf_opt {
+        Some(pb) => pb,
+        None => return Ok(None),
+    };
+    let key_file = File::open(pathbuf).context("Opening JWK file")?;
+    let key_reader = BufReader::new(key_file);
+    let jwk = serde_json::from_reader(key_reader).context("Reading JWK file")?;
+    Ok(Some(jwk))
+}
+
 impl KeyArg {
     fn get_jwk(&self) -> JWK {
         self.get_jwk_opt()
@@ -351,7 +388,7 @@ set. For more info, see the manual for ssh-agent(1) and ssh-add(1).
     }
 }
 
-fn main() {
+fn main() -> AResult<()> {
     let rt = runtime::get().unwrap();
     let opt = DIDKit::from_args();
     let ssh_agent_sock;
@@ -621,6 +658,38 @@ fn main() {
             stdout().write_all(normalized.as_bytes()).unwrap();
         }
 
+        DIDKit::DIDCreate {
+            method,
+            args,
+            signing_key,
+            update_key,
+            recovery_key,
+            options,
+        } => {
+            let method = DID_METHODS
+                .get(&method)
+                .ok_or(anyhow!("Unable to get DID method"))?;
+            let signing_key = read_jwk_file_opt(&signing_key)
+                .context("Unable to read  signing key for DID Create")?;
+            let update_key = read_jwk_file_opt(&update_key)
+                .context("Unable to read  update key for DID Create")?;
+            let recovery_key = read_jwk_file_opt(&recovery_key)
+                .context("Unable to read recovery key for DID Create")?;
+            let options = metadata_properties_to_value(options)
+                .context("Unable to parse options for DID Create")?;
+
+            let did = method
+                .create(DIDCreate {
+                    args,
+                    recovery_key,
+                    update_key,
+                    signing_key,
+                    options,
+                })
+                .context("DID Create failed")?;
+            println!("{}", did);
+        }
+
         DIDKit::DIDResolve {
             did,
             with_metadata,
@@ -735,4 +804,5 @@ fn main() {
             }
         }
     }
+    Ok(())
 }
