@@ -11,9 +11,9 @@ use crate::runtime;
 use crate::Source;
 use crate::VerifiableCredential;
 use crate::VerifiablePresentation;
-use crate::DID_METHODS;
 use crate::JWK;
 use crate::{dereference, DereferencingInputMetadata, ResolutionInputMetadata, ResolutionResult};
+use crate::{DIDMethod, DID_METHODS};
 use crate::{JWTOrLDPOptions, ProofFormat};
 
 /// The version of the DIDKit library, as a NULL-terminated string

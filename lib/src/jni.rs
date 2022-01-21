@@ -11,9 +11,9 @@ use crate::ResolutionResult;
 use crate::Source;
 use crate::VerifiableCredential;
 use crate::VerifiablePresentation;
-use crate::DID_METHODS;
 use crate::JWK;
 use crate::{dereference, DereferencingInputMetadata, ResolutionInputMetadata};
+use crate::{DIDMethod, DID_METHODS};
 use crate::{JWTOrLDPOptions, ProofFormat};
 
 pub static VERSION: &str = env!("CARGO_PKG_VERSION");
