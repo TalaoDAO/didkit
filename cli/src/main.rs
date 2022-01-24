@@ -74,9 +74,6 @@ pub enum DIDKit {
         /// DID method name
         method: String,
 
-        /// DID-method-specific arguments
-        args: Vec<String>,
-
         /// JWK file for signing purposes
         #[structopt(short, long, parse(from_os_str))]
         signing_key: Option<PathBuf>,
@@ -660,7 +657,6 @@ fn main() -> AResult<()> {
 
         DIDKit::DIDCreate {
             method,
-            args,
             signing_key,
             update_key,
             recovery_key,
@@ -680,7 +676,6 @@ fn main() -> AResult<()> {
 
             let did = method
                 .create(DIDCreate {
-                    args,
                     recovery_key,
                     update_key,
                     signing_key,
