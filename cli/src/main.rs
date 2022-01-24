@@ -13,9 +13,9 @@ use structopt::{clap::AppSettings, clap::ArgGroup, StructOpt};
 use did_method_key::DIDKey;
 use didkit::generate_proof;
 use didkit::{
-    dereference, get_verification_method, runtime, DIDCreate, DIDMethod, DIDResolver,
-    DereferencingInputMetadata, Error, LinkedDataProofOptions, Metadata, ProofFormat, ProofPurpose,
-    ResolutionInputMetadata, ResolutionResult, Source, VerifiableCredential,
+    dereference, get_verification_method, runtime, DIDCreate, DIDDeactivate, DIDMethod,
+    DIDResolver, DereferencingInputMetadata, Error, LinkedDataProofOptions, Metadata, ProofFormat,
+    ProofPurpose, ResolutionInputMetadata, ResolutionResult, Source, VerifiableCredential,
     VerifiablePresentation, DID_METHODS, JWK, URI,
 };
 use didkit_cli::opts::ResolverOptions;
@@ -68,8 +68,8 @@ pub enum DIDKit {
 
     // DID Functionality
     /// Create new DID Document.
-    // https://identity.foundation/did-registration/#create
-    // (method), jobId, options, secret, didDocument
+    // See also: https://identity.foundation/did-registration/#create
+    //           (method), jobId, options, secret, didDocument
     DIDCreate {
         /// DID method name
         method: String,
@@ -133,8 +133,21 @@ pub enum DIDKit {
     DIDUpdateAuthentication {},
     /// Update a DID Document’s service endpoint(s).
     DIDUpdateServiceEndpoints {},
+    */
     /// Deactivate a DID.
-    DIDDeactivate {},
+    DIDDeactivate {
+        did: String,
+
+        /// Filename of JWK to perform the DID Deactivate operation
+        #[structopt(short, long, parse(from_os_str))]
+        key: Option<PathBuf>,
+
+        #[structopt(short = "o", name = "name=value")]
+        /// Options for DID deactivate operation
+        options: Vec<MetadataProperty>,
+    },
+
+    /*
     /// Create a Signed IETF JSON Patch to update a DID document.
     DIDPatch {},
     */
@@ -683,6 +696,20 @@ fn main() -> AResult<()> {
                 })
                 .context("DID Create failed")?;
             println!("{}", did);
+        }
+
+        DIDKit::DIDDeactivate { did, key, options } => {
+            let method = DID_METHODS
+                .get_method(&did)
+                .map_err(|e| anyhow!("Unable to get DID method: {}", e))?;
+            let key = read_jwk_file_opt(&key).context("Unable to read key for DID deactivation")?;
+            let options = metadata_properties_to_value(options)
+                .context("Unable to parse options for DID deactivation")?;
+
+            method
+                .deactivate(DIDDeactivate { did, key, options })
+                .context("DID deactivation failed")?;
+            println!("Deactivated {}", did);
         }
 
         DIDKit::DIDResolve {
