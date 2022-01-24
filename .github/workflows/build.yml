@@ -105,9 +105,9 @@ jobs:
     - name: Checkout VC API Test Suite
       uses: actions/checkout@v2
       with:
-        repository: w3c-ccg/vc-api-test-suite
+        repository: clehner/vc-api-test-suite
         path: didkit/http/tests/vc-api/vc-api-test-suite
-        ref: a74c63d2d015efcb1c5d22a5d283536026faf5ec
+        ref: 8995c773bf2e358ea13166bcc14c0f86bebe86aa
 
     - name: Run VC API Test Suite
       working-directory: didkit/http/tests/vc-api
