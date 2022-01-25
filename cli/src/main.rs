@@ -14,7 +14,7 @@ use did_method_key::DIDKey;
 use didkit::generate_proof;
 use didkit::{
     dereference, get_verification_method, runtime, DIDCreate, DIDDeactivate, DIDDocumentOperation,
-    DIDMethod, DIDRecover, DIDResolver, DIDUpdate, DereferencingInputMetadata, Error,
+    DIDMethod, DIDRecover, DIDResolver, DIDUpdate, DereferencingInputMetadata, Document, Error,
     LinkedDataProofOptions, Metadata, ProofFormat, ProofPurpose, ResolutionInputMetadata,
     ResolutionResult, Source, VerifiableCredential, VerifiablePresentation, DID_METHODS, JWK, URI,
 };
@@ -111,6 +111,9 @@ pub enum DIDKit {
         ///
         /// More info: https://identity.foundation/did-registration/#options
         options: Vec<MetadataProperty>,
+
+        #[structopt(flatten)]
+        cmd: DIDUpdateCmd,
     },
 
     /// Recover a DID.
@@ -258,6 +261,26 @@ pub enum DIDKit {
     /// Receive a DIDComm message.
     DIDCommReceive {},
     */
+}
+
+#[derive(StructOpt, Debug)]
+pub enum DIDUpdateCmd {
+    AddVerificationMethod {
+        // TODO
+        id: String,
+    },
+    AddServiceEndpoint {
+        // TODO
+        id: String,
+    },
+    RemoveServiceEndpoint {
+        /// id of service endpoint to remove
+        id: String,
+    },
+    RemoveVerificationMethod {
+        /// id of verification method to remove
+        id: String,
+    },
 }
 
 #[derive(StructOpt, Debug)]
@@ -751,6 +774,7 @@ fn main() -> AResult<()> {
             new_update_key,
             update_key,
             options,
+            cmd,
         } => {
             let method = DID_METHODS
                 .get_method(&did)
@@ -762,8 +786,21 @@ fn main() -> AResult<()> {
             let options = metadata_properties_to_value(options)
                 .context("Unable to parse options for DID update")?;
 
-            let doc = Document::new(did);
-            // TODO: construct operation
+            let doc = Document::new(&did);
+            match cmd {
+                DIDUpdateCmd::AddVerificationMethod { id } => {
+                    todo!();
+                }
+                DIDUpdateCmd::RemoveVerificationMethod { id } => {
+                    todo!();
+                }
+                DIDUpdateCmd::AddServiceEndpoint { id } => {
+                    todo!();
+                }
+                DIDUpdateCmd::RemoveServiceEndpoint { id } => {
+                    todo!();
+                }
+            }
             let operation = DIDDocumentOperation::SetDidDocument(doc);
             method
                 .update(DIDUpdate {
