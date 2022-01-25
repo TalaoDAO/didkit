@@ -13,10 +13,10 @@ use structopt::{clap::AppSettings, clap::ArgGroup, StructOpt};
 use did_method_key::DIDKey;
 use didkit::generate_proof;
 use didkit::{
-    dereference, get_verification_method, runtime, DIDCreate, DIDDeactivate, DIDMethod, DIDRecover,
-    DIDResolver, DereferencingInputMetadata, Error, LinkedDataProofOptions, Metadata, ProofFormat,
-    ProofPurpose, ResolutionInputMetadata, ResolutionResult, Source, VerifiableCredential,
-    VerifiablePresentation, DID_METHODS, JWK, URI,
+    dereference, get_verification_method, runtime, DIDCreate, DIDDeactivate, DIDDocumentOperation,
+    DIDMethod, DIDRecover, DIDResolver, DIDUpdate, DereferencingInputMetadata, Error,
+    LinkedDataProofOptions, Metadata, ProofFormat, ProofPurpose, ResolutionInputMetadata,
+    ResolutionResult, Source, VerifiableCredential, VerifiablePresentation, DID_METHODS, JWK, URI,
 };
 use didkit_cli::opts::ResolverOptions;
 
@@ -88,6 +88,26 @@ pub enum DIDKit {
 
         #[structopt(short = "o", name = "name=value")]
         /// Options for DID create operation
+        ///
+        /// More info: https://identity.foundation/did-registration/#options
+        options: Vec<MetadataProperty>,
+    },
+
+    /// Update a DID.
+    DIDUpdate {
+        /// DID to recover
+        did: String,
+
+        /// New JWK file for next DID Update operation
+        #[structopt(short = "u", long, parse(from_os_str))]
+        new_update_key: Option<PathBuf>,
+
+        /// JWK file for performing this DID update operation.
+        #[structopt(short = "U", long, parse(from_os_str))]
+        update_key: Option<PathBuf>,
+
+        #[structopt(short = "o", name = "name=value")]
+        /// Options for DID Update operation
         ///
         /// More info: https://identity.foundation/did-registration/#options
         options: Vec<MetadataProperty>,
@@ -724,6 +744,37 @@ fn main() -> AResult<()> {
                 })
                 .context("DID Create failed")?;
             println!("{}", did);
+        }
+
+        DIDKit::DIDUpdate {
+            did,
+            new_update_key,
+            update_key,
+            options,
+        } => {
+            let method = DID_METHODS
+                .get_method(&did)
+                .map_err(|e| anyhow!("Unable to get DID method: {}", e))?;
+            let new_update_key = read_jwk_file_opt(&new_update_key)
+                .context("Unable to read new update key for DID update")?;
+            let update_key = read_jwk_file_opt(&update_key)
+                .context("Unable to read update key for DID update")?;
+            let options = metadata_properties_to_value(options)
+                .context("Unable to parse options for DID update")?;
+
+            let doc = Document::new(did);
+            // TODO: construct operation
+            let operation = DIDDocumentOperation::SetDidDocument(doc);
+            method
+                .update(DIDUpdate {
+                    did: did.clone(),
+                    update_key,
+                    new_update_key,
+                    operation,
+                    options,
+                })
+                .context("DID Update failed")?;
+            println!("Updated {}", did);
         }
 
         DIDKit::DIDRecover {
