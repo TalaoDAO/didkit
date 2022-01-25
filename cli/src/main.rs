@@ -74,9 +74,9 @@ pub enum DIDKit {
         /// DID method name
         method: String,
 
-        /// JWK file for signing purposes
+        /// JWK file for default verification method
         #[structopt(short, long, parse(from_os_str))]
-        signing_key: Option<PathBuf>,
+        verification_key: Option<PathBuf>,
 
         /// JWK file for DID Update operations
         #[structopt(short, long, parse(from_os_str))]
@@ -98,9 +98,9 @@ pub enum DIDKit {
         /// DID to recover
         did: String,
 
-        /// New JWK file for signing purposes
-        #[structopt(short = "s", long, parse(from_os_str))]
-        new_signing_key: Option<PathBuf>,
+        /// New JWK file for default verification method
+        #[structopt(short = "v", long, parse(from_os_str))]
+        new_verification_key: Option<PathBuf>,
 
         /// New JWK file for DID Update operations
         #[structopt(short = "u", long, parse(from_os_str))]
@@ -698,7 +698,7 @@ fn main() -> AResult<()> {
 
         DIDKit::DIDCreate {
             method,
-            signing_key,
+            verification_key,
             update_key,
             recovery_key,
             options,
@@ -706,7 +706,7 @@ fn main() -> AResult<()> {
             let method = DID_METHODS
                 .get(&method)
                 .ok_or(anyhow!("Unable to get DID method"))?;
-            let signing_key = read_jwk_file_opt(&signing_key)
+            let verification_key = read_jwk_file_opt(&verification_key)
                 .context("Unable to read  signing key for DID Create")?;
             let update_key = read_jwk_file_opt(&update_key)
                 .context("Unable to read  update key for DID Create")?;
@@ -719,7 +719,7 @@ fn main() -> AResult<()> {
                 .create(DIDCreate {
                     recovery_key,
                     update_key,
-                    signing_key,
+                    verification_key,
                     options,
                 })
                 .context("DID Create failed")?;
@@ -728,7 +728,7 @@ fn main() -> AResult<()> {
 
         DIDKit::DIDRecover {
             did,
-            new_signing_key,
+            new_verification_key,
             new_update_key,
             new_recovery_key,
             recovery_key,
@@ -737,7 +737,7 @@ fn main() -> AResult<()> {
             let method = DID_METHODS
                 .get_method(&did)
                 .map_err(|e| anyhow!("Unable to get DID method: {}", e))?;
-            let new_signing_key = read_jwk_file_opt(&new_signing_key)
+            let new_verification_key = read_jwk_file_opt(&new_verification_key)
                 .context("Unable to read new signing key for DID recovery")?;
             let new_update_key = read_jwk_file_opt(&new_update_key)
                 .context("Unable to read new update key for DID recovery")?;
@@ -754,7 +754,7 @@ fn main() -> AResult<()> {
                     recovery_key,
                     new_recovery_key,
                     new_update_key,
-                    new_signing_key,
+                    new_verification_key,
                     options,
                 })
                 .context("DID Recover failed")?;
