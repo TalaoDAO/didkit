@@ -707,7 +707,11 @@ fn main() -> AResult<()> {
                 .context("Unable to parse options for DID deactivation")?;
 
             method
-                .deactivate(DIDDeactivate { did, key, options })
+                .deactivate(DIDDeactivate {
+                    did: did.clone(),
+                    key,
+                    options,
+                })
                 .context("DID deactivation failed")?;
             println!("Deactivated {}", did);
         }

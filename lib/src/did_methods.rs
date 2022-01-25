@@ -13,8 +13,8 @@ use std::env::VarError;
 lazy_static! {
     static ref DIDTZ: DIDTz = DIDTz::default();
     static ref DIDONION: DIDOnion = DIDOnion::default();
-    static ref ION: DIDION = DIDION {
-        sidetree_api_url: match std::env::var("DID_ION_API_URL") {
+    static ref ION: DIDION = DIDION::new(
+        match std::env::var("DID_ION_API_URL") {
             Ok(string) => Some(string),
             Err(VarError::NotPresent) => None,
             Err(VarError::NotUnicode(err)) => {
@@ -22,7 +22,7 @@ lazy_static! {
                 None
             }
         }
-    };
+    );
     pub static ref DID_METHODS: DIDMethods<'static> = {
         let mut methods = DIDMethods::default();
         methods.insert(&DIDKey);
