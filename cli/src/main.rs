@@ -13,7 +13,7 @@ use structopt::{clap::AppSettings, clap::ArgGroup, StructOpt};
 use did_method_key::DIDKey;
 use didkit::generate_proof;
 use didkit::{
-    dereference, get_verification_method, runtime, DIDCreate, DIDDeactivate, DIDMethod,
+    dereference, get_verification_method, runtime, DIDCreate, DIDDeactivate, DIDMethod, DIDRecover,
     DIDResolver, DereferencingInputMetadata, Error, LinkedDataProofOptions, Metadata, ProofFormat,
     ProofPurpose, ResolutionInputMetadata, ResolutionResult, Source, VerifiableCredential,
     VerifiablePresentation, DID_METHODS, JWK, URI,
@@ -88,6 +88,34 @@ pub enum DIDKit {
 
         #[structopt(short = "o", name = "name=value")]
         /// Options for DID create operation
+        ///
+        /// More info: https://identity.foundation/did-registration/#options
+        options: Vec<MetadataProperty>,
+    },
+
+    /// Recover a DID.
+    DIDRecover {
+        /// DID to recover
+        did: String,
+
+        /// New JWK file for signing purposes
+        #[structopt(short = "s", long, parse(from_os_str))]
+        new_signing_key: Option<PathBuf>,
+
+        /// New JWK file for DID Update operations
+        #[structopt(short = "u", long, parse(from_os_str))]
+        new_update_key: Option<PathBuf>,
+
+        /// New JWK file for DID Recovery and/or Deactivate operations
+        #[structopt(short = "r", long, parse(from_os_str))]
+        new_recovery_key: Option<PathBuf>,
+
+        /// JWK file for performing this DID recover operation.
+        #[structopt(short = "R", long, parse(from_os_str))]
+        recovery_key: Option<PathBuf>,
+
+        #[structopt(short = "o", name = "name=value")]
+        /// Options for DID Recover operation
         ///
         /// More info: https://identity.foundation/did-registration/#options
         options: Vec<MetadataProperty>,
@@ -696,6 +724,41 @@ fn main() -> AResult<()> {
                 })
                 .context("DID Create failed")?;
             println!("{}", did);
+        }
+
+        DIDKit::DIDRecover {
+            did,
+            new_signing_key,
+            new_update_key,
+            new_recovery_key,
+            recovery_key,
+            options,
+        } => {
+            let method = DID_METHODS
+                .get_method(&did)
+                .map_err(|e| anyhow!("Unable to get DID method: {}", e))?;
+            let new_signing_key = read_jwk_file_opt(&new_signing_key)
+                .context("Unable to read new signing key for DID recovery")?;
+            let new_update_key = read_jwk_file_opt(&new_update_key)
+                .context("Unable to read new update key for DID recovery")?;
+            let new_recovery_key = read_jwk_file_opt(&new_recovery_key)
+                .context("Unable to read new recovery key for DID recovery")?;
+            let recovery_key = read_jwk_file_opt(&recovery_key)
+                .context("Unable to read recovery key for DID recovery")?;
+            let options = metadata_properties_to_value(options)
+                .context("Unable to parse options for DID recovery")?;
+
+            method
+                .recover(DIDRecover {
+                    did: did.clone(),
+                    recovery_key,
+                    new_recovery_key,
+                    new_update_key,
+                    new_signing_key,
+                    options,
+                })
+                .context("DID Recover failed")?;
+            println!("Recovered {}", did);
         }
 
         DIDKit::DIDDeactivate { did, key, options } => {
