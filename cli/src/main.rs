@@ -95,9 +95,6 @@ pub enum DIDKit {
 
     /// Update a DID.
     DIDUpdate {
-        /// DID to recover
-        did: String,
-
         /// New JWK file for next DID Update operation
         #[structopt(short = "u", long, parse(from_os_str))]
         new_update_key: Option<PathBuf>,
@@ -267,14 +264,24 @@ pub enum DIDKit {
 pub enum DIDUpdateCmd {
     /// Add a verification method to the DID document
     AddVerificationMethod {
-        // TODO
+        /// DID URL of verification method to remove
         id: String,
+
+        /// DID from whose DID document to remove the verification method
+        ///
+        /// Defaults to the DID that is the prefix from the `id` argument.
+        did: Option<String>,
     },
 
-    /// Add a service endpoint to the DID document
-    AddServiceEndpoint {
-        // TODO
+    /// Add a service to the DID document
+    AddService {
+        /// URI of service to remove
         id: String,
+
+        /// DID from whose DID document to remove the verification method
+        ///
+        /// Defaults to the DID that is the prefix from the `id` argument.
+        did: Option<String>,
     },
 
     /// Remove a service endpoint from the DID document
