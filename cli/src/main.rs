@@ -16,7 +16,8 @@ use didkit::{
     dereference, get_verification_method, runtime, DIDCreate, DIDDeactivate, DIDDocumentOperation,
     DIDMethod, DIDRecover, DIDResolver, DIDUpdate, DereferencingInputMetadata, Document, Error,
     LinkedDataProofOptions, Metadata, ProofFormat, ProofPurpose, ResolutionInputMetadata,
-    ResolutionResult, Source, VerifiableCredential, VerifiablePresentation, DID_METHODS, JWK, URI,
+    ResolutionResult, Source, VerifiableCredential, VerifiablePresentation, DIDURL, DID_METHODS,
+    JWK, URI,
 };
 use didkit_cli::opts::ResolverOptions;
 
@@ -95,6 +96,15 @@ pub enum DIDKit {
 
     /// Update a DID.
     DIDUpdate {
+        /// URI to add/remove/update in DID document
+        id: String,
+
+        /// DID whose DID document to update
+        ///
+        /// Defaults to the DID that is the prefix from the `id` argument.
+        #[structopt(short, long)]
+        did: Option<String>,
+
         /// New JWK file for next DID Update operation
         #[structopt(short = "u", long, parse(from_os_str))]
         new_update_key: Option<PathBuf>,
@@ -261,39 +271,41 @@ pub enum DIDKit {
 }
 
 #[derive(StructOpt, Debug)]
+pub struct IdAndDid {
+    /// URI
+    id: String,
+
+    /// DID containing id
+    ///
+    /// Defaults to the DID that is the prefix from the `id` argument.
+    did: Option<String>,
+}
+
+#[derive(StructOpt, Debug)]
 pub enum DIDUpdateCmd {
     /// Add a verification method to the DID document
     AddVerificationMethod {
-        /// DID URL of verification method to remove
-        id: String,
-
-        /// DID from whose DID document to remove the verification method
-        ///
-        /// Defaults to the DID that is the prefix from the `id` argument.
-        did: Option<String>,
+        #[structopt(flatten)]
+        id_and_did: IdAndDid,
     },
 
     /// Add a service to the DID document
     AddService {
-        /// URI of service to remove
-        id: String,
-
-        /// DID from whose DID document to remove the verification method
-        ///
-        /// Defaults to the DID that is the prefix from the `id` argument.
-        did: Option<String>,
+        #[structopt(flatten)]
+        id_and_did: IdAndDid,
     },
 
     /// Remove a service endpoint from the DID document
-    RemoveServiceEndpoint {
-        /// id of service endpoint to remove
-        id: String,
+    RemoveService {
+        /// ID and DID
+        #[structopt(flatten)]
+        id_and_did: IdAndDid,
     },
 
     /// Remove a verification method from the DID document
     RemoveVerificationMethod {
-        /// id of verification method to remove
-        id: String,
+        #[structopt(flatten)]
+        id_and_did: IdAndDid,
     },
 }
 
@@ -481,6 +493,11 @@ set. For more info, see the manual for ssh-agent(1) and ssh-add(1).
         }
         Err(VarError::NotUnicode(_)) => panic!("Unable to parse SSH_AUTH_SOCK"),
     }
+}
+
+fn did_from_id(id: &str) -> AResult<String> {
+    let did_url = DIDURL::from_str(id).context("Unable to parse id as DID URL")?;
+    Ok(did_url.did)
 }
 
 fn main() -> AResult<()> {
@@ -784,15 +801,20 @@ fn main() -> AResult<()> {
         }
 
         DIDKit::DIDUpdate {
-            did,
             new_update_key,
             update_key,
             options,
             cmd,
+            id,
+            did,
         } => {
             let method = DID_METHODS
-                .get_method(&did)
+                .get_method(&id)
                 .map_err(|e| anyhow!("Unable to get DID method: {}", e))?;
+            let did = match did {
+                Some(did) => did,
+                None => did_from_id(&id).context("Unable to get DID from id")?,
+            };
             let new_update_key = read_jwk_file_opt(&new_update_key)
                 .context("Unable to read new update key for DID update")?;
             let update_key = read_jwk_file_opt(&update_key)
@@ -802,16 +824,16 @@ fn main() -> AResult<()> {
 
             let doc = Document::new(&did);
             match cmd {
-                DIDUpdateCmd::AddVerificationMethod { id } => {
+                DIDUpdateCmd::AddVerificationMethod { id_and_did } => {
                     todo!();
                 }
-                DIDUpdateCmd::RemoveVerificationMethod { id } => {
+                DIDUpdateCmd::RemoveVerificationMethod { id_and_did } => {
                     todo!();
                 }
-                DIDUpdateCmd::AddServiceEndpoint { id } => {
+                DIDUpdateCmd::AddService { id_and_did } => {
                     todo!();
                 }
-                DIDUpdateCmd::RemoveServiceEndpoint { id } => {
+                DIDUpdateCmd::RemoveService { id_and_did } => {
                     todo!();
                 }
             }
