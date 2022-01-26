@@ -179,12 +179,7 @@ pub enum DIDKit {
         #[structopt(flatten)]
         resolver_options: ResolverOptions,
     },
-    /*
-    /// Update a DID Document’s authentication.
-    DIDUpdateAuthentication {},
-    /// Update a DID Document’s service endpoint(s).
-    DIDUpdateServiceEndpoints {},
-    */
+
     /// Deactivate a DID.
     DIDDeactivate {
         did: String,
@@ -295,16 +290,17 @@ impl IdAndDid {
 pub enum DIDUpdateCmd {
     /// Add a verification method to the DID document
     SetVerificationMethod {
-        /// ASDF
         #[structopt(flatten)]
         id_and_did: IdAndDid,
     },
 
     /// Add a service to the DID document
     SetService {
-        /// AOOOA
         #[structopt(flatten)]
         id_and_did: IdAndDid,
+
+        /// serviceEndpoint URI or JSON object
+        endpoint: Vec<String>,
 
         /// Service type
         r#type: String,
@@ -835,14 +831,23 @@ fn main() -> AResult<()> {
                     let op = DIDDocumentOperation::RemoveVerificationMethod(id);
                     (did, method, op)
                 }
-                DIDUpdateCmd::SetService { id_and_did, r#type } => {
+                DIDUpdateCmd::SetService {
+                    id_and_did,
+                    endpoint,
+                    r#type,
+                } => {
                     let (method, did, id) = id_and_did
                         .parse()
                         .context("Unable to parse id/DID for set-verification-method subcommand")?;
+                    let service_endpoint = match endpoint.as_slice() {
+                        &[] => None,
+                        &[endpoint] => Some(OneOrMany::One(endpoint)),
+                        _ => Some(OneOrMany::Many(endpoint)),
+                    };
                     let service = Service {
                         id: id.to_string(),
                         type_: OneOrMany::One(r#type),
-                        service_endpoint: None,
+                        service_endpoint,
                         property_set: None,
                     };
                     let op = DIDDocumentOperation::SetService(service);
