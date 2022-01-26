@@ -265,18 +265,25 @@ pub enum DIDKit {
 
 #[derive(StructOpt, Debug)]
 pub enum DIDUpdateCmd {
+    /// Add a verification method to the DID document
     AddVerificationMethod {
         // TODO
         id: String,
     },
+
+    /// Add a service endpoint to the DID document
     AddServiceEndpoint {
         // TODO
         id: String,
     },
+
+    /// Remove a service endpoint from the DID document
     RemoveServiceEndpoint {
         /// id of service endpoint to remove
         id: String,
     },
+
+    /// Remove a verification method from the DID document
     RemoveVerificationMethod {
         /// id of verification method to remove
         id: String,
