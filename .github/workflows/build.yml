@@ -107,7 +107,7 @@ jobs:
       with:
         repository: clehner/vc-api-test-suite
         path: didkit/http/tests/vc-api/vc-api-test-suite
-        ref: 8995c773bf2e358ea13166bcc14c0f86bebe86aa
+        ref: e57ebd99770eccf021118aef761627603c3bb36d
 
     - name: Run VC API Test Suite
       working-directory: didkit/http/tests/vc-api
