@@ -20,6 +20,8 @@ use didkit::{
     JWK, URI,
 };
 use didkit_cli::opts::ResolverOptions;
+use ssi::did::Service;
+use ssi::one_or_many::OneOrMany;
 
 #[derive(StructOpt, Debug)]
 pub enum DIDKit {
@@ -96,15 +98,6 @@ pub enum DIDKit {
 
     /// Update a DID.
     DIDUpdate {
-        /// URI to add/remove/update in DID document
-        id: String,
-
-        /// DID whose DID document to update
-        ///
-        /// Defaults to the DID that is the prefix from the `id` argument.
-        #[structopt(short, long)]
-        did: Option<String>,
-
         /// New JWK file for next DID Update operation
         #[structopt(short = "u", long, parse(from_os_str))]
         new_update_key: Option<PathBuf>,
@@ -270,43 +263,59 @@ pub enum DIDKit {
     */
 }
 
+/// An id and optionally a DID
+///
+/// where the id may be present in the DID's DID document
+/// and may be a DID URL.
 #[derive(StructOpt, Debug)]
 pub struct IdAndDid {
-    /// URI
+    /// URI to add/remove/update in DID document
+    #[structopt(short, long)]
     id: String,
 
-    /// DID containing id
+    /// DID whose DID document to update
     ///
     /// Defaults to the DID that is the prefix from the `id` argument.
     did: Option<String>,
 }
 
+impl IdAndDid {
+    pub fn parse<'a>(self) -> AResult<(&'a dyn DIDMethod, String, DIDURL)> {
+        let method = DID_METHODS
+            .get_method(&id)
+            .map_err(|e| anyhow!("Unable to get DID method: {}", e))?;
+        let did = match did {
+            Some(did) => did,
+            None => {
+                let did_url = DIDURL::from_str(id).context("Unable to parse id as DID URL")?;
+                did_url.did
+            }
+        };
+        Ok((method, did, id))
+    }
+}
+
 #[derive(StructOpt, Debug)]
 pub enum DIDUpdateCmd {
     /// Add a verification method to the DID document
-    AddVerificationMethod {
+    SetVerificationMethod {
         #[structopt(flatten)]
         id_and_did: IdAndDid,
     },
 
     /// Add a service to the DID document
-    AddService {
+    SetService {
         #[structopt(flatten)]
         id_and_did: IdAndDid,
+
+        r#type: String
     },
 
     /// Remove a service endpoint from the DID document
-    RemoveService {
-        /// ID and DID
-        #[structopt(flatten)]
-        id_and_did: IdAndDid,
-    },
+    RemoveService(IdAndDid),
 
     /// Remove a verification method from the DID document
-    RemoveVerificationMethod {
-        #[structopt(flatten)]
-        id_and_did: IdAndDid,
-    },
+    RemoveVerificationMethod(IdAndDid),
 }
 
 #[derive(StructOpt, Debug)]
@@ -493,11 +502,6 @@ set. For more info, see the manual for ssh-agent(1) and ssh-add(1).
         }
         Err(VarError::NotUnicode(_)) => panic!("Unable to parse SSH_AUTH_SOCK"),
     }
-}
-
-fn did_from_id(id: &str) -> AResult<String> {
-    let did_url = DIDURL::from_str(id).context("Unable to parse id as DID URL")?;
-    Ok(did_url.did)
 }
 
 fn main() -> AResult<()> {
@@ -805,16 +809,7 @@ fn main() -> AResult<()> {
             update_key,
             options,
             cmd,
-            id,
-            did,
         } => {
-            let method = DID_METHODS
-                .get_method(&id)
-                .map_err(|e| anyhow!("Unable to get DID method: {}", e))?;
-            let did = match did {
-                Some(did) => did,
-                None => did_from_id(&id).context("Unable to get DID from id")?,
-            };
             let new_update_key = read_jwk_file_opt(&new_update_key)
                 .context("Unable to read new update key for DID update")?;
             let update_key = read_jwk_file_opt(&update_key)
@@ -823,20 +818,38 @@ fn main() -> AResult<()> {
                 .context("Unable to parse options for DID update")?;
 
             let doc = Document::new(&did);
-            match cmd {
-                DIDUpdateCmd::AddVerificationMethod { id_and_did } => {
-                    todo!();
+            let (did, method, operation) = match cmd {
+                DIDUpdateCmd::SetVerificationMethod { id_and_did } => {
+                    let (method, did, id) = id_and_did
+                        .parse()
+                        .context("Unable to parse id/DID for set-verification-method subcommand")?;
+                    DIDDocumentOperation::SetVerificationMethod { vmm, purposes }
                 }
-                DIDUpdateCmd::RemoveVerificationMethod { id_and_did } => {
-                    todo!();
+                DIDUpdateCmd::RemoveVerificationMethod(id_and_did) => {
+                    let (method, did, id) = id_and_did.parse().context(
+                        "Unable to parse id/DID for remove-verification-method subcommand",
+                    )?;
+                    DIDDocumentOperation::RemoveVerificationMethod ( id )
                 }
-                DIDUpdateCmd::AddService { id_and_did } => {
-                    todo!();
-                }
-                DIDUpdateCmd::RemoveService { id_and_did } => {
-                    todo!();
-                }
-            }
+                DIDUpdateCmd::SetService { id_and_did, r#type } => {
+                    let (method, did, id) = id_and_did
+                        .parse()
+                        .context("Unable to parse id/DID for set-verification-method subcommand")?;
+                    let service = Service {
+                        id,
+                        type_: OneOrMany::One(r#type),
+                            service_endpoint: None
+                            property_set: None
+                    };
+                    DIDDocumentOperation::SetService ( service )
+            },
+                DIDUpdateCmd::RemoveService(id_and_did) => {
+                    let (method, did, id) = id_and_did
+                        .parse()
+                        .context("Unable to parse id/DID for set-verification-method subcommand")?;
+                    DIDDocumentOperation::RemoveService ( id )
+            },
+            };
             let operation = DIDDocumentOperation::SetDidDocument(doc);
             method
                 .update(DIDUpdate {
