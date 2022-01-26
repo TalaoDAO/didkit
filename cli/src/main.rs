@@ -271,7 +271,7 @@ pub struct IdAndDid {
 
     /// DID whose DID document to update
     ///
-    /// Defaults to the DID that is the prefix from the `id` argument.
+    /// Defaults to the DID that is the prefix from the <id> argument.
     #[structopt(short, long)]
     did: Option<String>,
 }
@@ -302,6 +302,16 @@ pub enum DIDUpdateCmd {
     SetVerificationMethod {
         #[structopt(flatten)]
         id_and_did: IdAndDid,
+
+        /// Verification method type
+        #[structopt(short, long)]
+        type_: String,
+
+        /// Verification method controller property
+        controller: Option<String>,
+
+        /// Public Key JWK
+        public_key_jwk: Option<PathBuf>,
     },
 
     /// Add a service to the DID document
@@ -309,12 +319,13 @@ pub enum DIDUpdateCmd {
         #[structopt(flatten)]
         id_and_did: IdAndDid,
 
-        /// serviceEndpoint URI or JSON object
-        #[structopt(parse(try_from_str = parse_service_endpoint))]
-        endpoint: Vec<ServiceEndpoint>,
-
         /// Service type
-        r#type: String,
+        #[structopt(short, long)]
+        r#type: Vec<String>,
+
+        /// serviceEndpoint URI or JSON object
+        #[structopt(short, long, parse(try_from_str = parse_service_endpoint))]
+        endpoint: Vec<ServiceEndpoint>,
     },
 
     /// Remove a service endpoint from the DID document
@@ -824,12 +835,24 @@ fn main() -> AResult<()> {
                 .context("Unable to parse options for DID update")?;
 
             let (did, method, operation) = match cmd {
-                DIDUpdateCmd::SetVerificationMethod { id_and_did } => {
+                DIDUpdateCmd::SetVerificationMethod {
+                    id_and_did,
+                    type_,
+                    controller,
+                    public_key_jwk,
+                } => {
+                    let public_key_jwk = read_jwk_file_opt(&public_key_jwk)
+                        .context("Unable to read public key JWK file")?;
                     let (method, did, id) = id_and_did
                         .parse()
                         .context("Unable to parse id/DID for set-verification-method subcommand")?;
-                    let purposes = vec![]; // TODO
+                    let purposes = vec![];
+                    let controller = controller.unwrap_or_else(|| did.clone());
                     let vmm = ssi::did::VerificationMethodMap {
+                        id: id.to_string(),
+                        type_,
+                        controller,
+                        public_key_jwk,
                         ..Default::default()
                     };
                     let op = DIDDocumentOperation::SetVerificationMethod { vmm, purposes };
@@ -855,9 +878,18 @@ fn main() -> AResult<()> {
                         1 => endpoint.into_iter().next().map(OneOrMany::One),
                         _ => Some(OneOrMany::Many(endpoint)),
                     };
+                    let type_ = match r#type.len() {
+                        1 => r#type
+                            .into_iter()
+                            .next()
+                            .map(OneOrMany::One)
+                            .ok_or(anyhow!("Missing service type"))?,
+
+                        _ => OneOrMany::Many(r#type),
+                    };
                     let service = Service {
                         id: id.to_string(),
-                        type_: OneOrMany::One(r#type),
+                        type_,
                         service_endpoint,
                         property_set: None,
                     };
