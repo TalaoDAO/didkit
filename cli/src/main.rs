@@ -20,7 +20,7 @@ use didkit::{
     JWK, URI,
 };
 use didkit_cli::opts::ResolverOptions;
-use ssi::did::Service;
+use ssi::did::{Service, ServiceEndpoint};
 use ssi::one_or_many::OneOrMany;
 
 #[derive(StructOpt, Debug)]
@@ -286,21 +286,13 @@ impl IdAndDid {
     }
 }
 
-pub enum UriOrObject {
-    Object(Value),
-    Uri(String),
-}
-
-impl FromStr for UriOrObject {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s.trim();
-        if s.starts_with('{') {
-            let value = serde_json::from_str(s).context("Unable to parse URI or Object")?;
-            Ok(Self::Object(value))
-        } else {
-            Ok(Self::Uri(s.to_string()))
-        }
+fn parse_service_endpoint(uri_or_object: &str) -> AResult<ServiceEndpoint> {
+    let s = uri_or_object.trim();
+    if s.starts_with('{') {
+        let value = serde_json::from_str(s).context("Unable to parse URI or Object")?;
+        Ok(ServiceEndpoint::Map(value))
+    } else {
+        Ok(ServiceEndpoint::URI(s.to_string()))
     }
 }
 
@@ -318,7 +310,8 @@ pub enum DIDUpdateCmd {
         id_and_did: IdAndDid,
 
         /// serviceEndpoint URI or JSON object
-        endpoint: Vec<UriOrObject>,
+        #[structopt(parse(try_from_str = parse_service_endpoint))]
+        endpoint: Vec<ServiceEndpoint>,
 
         /// Service type
         r#type: String,
@@ -857,9 +850,9 @@ fn main() -> AResult<()> {
                     let (method, did, id) = id_and_did
                         .parse()
                         .context("Unable to parse id/DID for set-verification-method subcommand")?;
-                    let service_endpoint = match endpoint.as_slice() {
-                        &[] => None,
-                        &[endpoint] => Some(OneOrMany::One(endpoint)),
+                    let service_endpoint = match endpoint.len() {
+                        0 => None,
+                        1 => endpoint.into_iter().next().map(OneOrMany::One),
                         _ => Some(OneOrMany::Many(endpoint)),
                     };
                     let service = Service {
