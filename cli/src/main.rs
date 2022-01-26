@@ -263,35 +263,31 @@ pub enum DIDKit {
     */
 }
 
-/// An id and optionally a DID
-///
-/// where the id may be present in the DID's DID document
-/// and may be a DID URL.
+// An id and optionally a DID
+//
+// where the id may be present in the DID's DID document
+// and may be a DID URL.
+//
+// Cannot put docstring here because it overwrites help text for did-update subcommands
 #[derive(StructOpt, Debug)]
 pub struct IdAndDid {
     /// URI to add/remove/update in DID document
-    #[structopt(short, long)]
-    id: String,
+    id: DIDURL,
 
     /// DID whose DID document to update
     ///
     /// Defaults to the DID that is the prefix from the `id` argument.
+    #[structopt(short, long)]
     did: Option<String>,
 }
 
 impl IdAndDid {
     pub fn parse<'a>(self) -> AResult<(&'a dyn DIDMethod, String, DIDURL)> {
+        let Self { id, did } = self;
         let method = DID_METHODS
-            .get_method(&id)
+            .get_method(&id.did)
             .map_err(|e| anyhow!("Unable to get DID method: {}", e))?;
-        let did = match did {
-            Some(did) => did,
-            None => {
-                let did_url = DIDURL::from_str(id).context("Unable to parse id as DID URL")?;
-                did_url.did
-            }
-        };
-        Ok((method, did, id))
+        Ok((*method, did.unwrap_or_else(|| id.did.clone()), id))
     }
 }
 
@@ -299,16 +295,19 @@ impl IdAndDid {
 pub enum DIDUpdateCmd {
     /// Add a verification method to the DID document
     SetVerificationMethod {
+        /// ASDF
         #[structopt(flatten)]
         id_and_did: IdAndDid,
     },
 
     /// Add a service to the DID document
     SetService {
+        /// AOOOA
         #[structopt(flatten)]
         id_and_did: IdAndDid,
 
-        r#type: String
+        /// Service type
+        r#type: String,
     },
 
     /// Remove a service endpoint from the DID document
@@ -817,40 +816,46 @@ fn main() -> AResult<()> {
             let options = metadata_properties_to_value(options)
                 .context("Unable to parse options for DID update")?;
 
-            let doc = Document::new(&did);
             let (did, method, operation) = match cmd {
                 DIDUpdateCmd::SetVerificationMethod { id_and_did } => {
                     let (method, did, id) = id_and_did
                         .parse()
                         .context("Unable to parse id/DID for set-verification-method subcommand")?;
-                    DIDDocumentOperation::SetVerificationMethod { vmm, purposes }
+                    let purposes = vec![]; // TODO
+                    let vmm = ssi::did::VerificationMethodMap {
+                        ..Default::default()
+                    };
+                    let op = DIDDocumentOperation::SetVerificationMethod { vmm, purposes };
+                    (did, method, op)
                 }
                 DIDUpdateCmd::RemoveVerificationMethod(id_and_did) => {
                     let (method, did, id) = id_and_did.parse().context(
                         "Unable to parse id/DID for remove-verification-method subcommand",
                     )?;
-                    DIDDocumentOperation::RemoveVerificationMethod ( id )
+                    let op = DIDDocumentOperation::RemoveVerificationMethod(id);
+                    (did, method, op)
                 }
                 DIDUpdateCmd::SetService { id_and_did, r#type } => {
                     let (method, did, id) = id_and_did
                         .parse()
                         .context("Unable to parse id/DID for set-verification-method subcommand")?;
                     let service = Service {
-                        id,
+                        id: id.to_string(),
                         type_: OneOrMany::One(r#type),
-                            service_endpoint: None
-                            property_set: None
+                        service_endpoint: None,
+                        property_set: None,
                     };
-                    DIDDocumentOperation::SetService ( service )
-            },
+                    let op = DIDDocumentOperation::SetService(service);
+                    (did, method, op)
+                }
                 DIDUpdateCmd::RemoveService(id_and_did) => {
                     let (method, did, id) = id_and_did
                         .parse()
                         .context("Unable to parse id/DID for set-verification-method subcommand")?;
-                    DIDDocumentOperation::RemoveService ( id )
-            },
+                    let op = DIDDocumentOperation::RemoveService(id);
+                    (did, method, op)
+                }
             };
-            let operation = DIDDocumentOperation::SetDidDocument(doc);
             method
                 .update(DIDUpdate {
                     did: did.clone(),
