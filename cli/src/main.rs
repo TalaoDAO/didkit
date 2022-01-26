@@ -286,6 +286,24 @@ impl IdAndDid {
     }
 }
 
+pub enum UriOrObject {
+    Object(Value),
+    Uri(String),
+}
+
+impl FromStr for UriOrObject {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim();
+        if s.starts_with('{') {
+            let value = serde_json::from_str(s).context("Unable to parse URI or Object")?;
+            Ok(Self::Object(value))
+        } else {
+            Ok(Self::Uri(s.to_string()))
+        }
+    }
+}
+
 #[derive(StructOpt, Debug)]
 pub enum DIDUpdateCmd {
     /// Add a verification method to the DID document
@@ -300,7 +318,7 @@ pub enum DIDUpdateCmd {
         id_and_did: IdAndDid,
 
         /// serviceEndpoint URI or JSON object
-        endpoint: Vec<String>,
+        endpoint: Vec<UriOrObject>,
 
         /// Service type
         r#type: String,
