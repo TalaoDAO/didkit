@@ -293,7 +293,7 @@ impl IdAndDid {
 fn parse_service_endpoint(uri_or_object: &str) -> AResult<ServiceEndpoint> {
     let s = uri_or_object.trim();
     if s.starts_with('{') {
-        let value = serde_json::from_str(s).context("Unable to parse URI or Object")?;
+        let value = serde_json::from_str(s).context("Parse URI or Object")?;
         Ok(ServiceEndpoint::Map(value))
     } else {
         Ok(ServiceEndpoint::URI(s.to_string()))
@@ -526,9 +526,9 @@ impl TryFrom<PublicKeyArgEnum> for PublicKeyProperty {
     fn try_from(pka: PublicKeyArgEnum) -> AResult<PublicKeyProperty> {
         Ok(match pka {
             PublicKeyArgEnum::PublicKeyJwkPath(path) => {
-                let key_file = File::open(path).context("Unable to open JWK file")?;
+                let key_file = File::open(path).context("Open JWK file")?;
                 let key_reader = BufReader::new(key_file);
-                let jwk = serde_json::from_reader(key_reader).context("Unable to read JWK file")?;
+                let jwk = serde_json::from_reader(key_reader).context("Read JWK file")?;
                 PublicKeyProperty::JWK(jwk)
             }
             PublicKeyArgEnum::PublicKeyJwk(jwk) => PublicKeyProperty::JWK(jwk),
@@ -962,13 +962,13 @@ fn main() -> AResult<()> {
                 .get(&method)
                 .ok_or(anyhow!("Unable to get DID method"))?;
             let verification_key = read_jwk_file_opt(&verification_key)
-                .context("Unable to read  signing key for DID Create")?;
-            let update_key = read_jwk_file_opt(&update_key)
-                .context("Unable to read  update key for DID Create")?;
-            let recovery_key = read_jwk_file_opt(&recovery_key)
-                .context("Unable to read recovery key for DID Create")?;
-            let options = metadata_properties_to_value(options)
-                .context("Unable to parse options for DID Create")?;
+                .context("Read verification key for DID Create")?;
+            let update_key =
+                read_jwk_file_opt(&update_key).context("Read update key for DID Create")?;
+            let recovery_key =
+                read_jwk_file_opt(&recovery_key).context("Read recovery key for DID Create")?;
+            let options =
+                metadata_properties_to_value(options).context("Parse options for DID Create")?;
 
             let tx = method
                 .create(DIDCreate {
@@ -991,7 +991,7 @@ fn main() -> AResult<()> {
                 .ok_or(anyhow!("Unable to get DID method"))?;
             let did = method
                 .did_from_transaction(tx)
-                .context("Unable to get DID from transaction")?;
+                .context("Get DID from transaction")?;
             println!("{}", did);
         }
 
@@ -1001,12 +1001,12 @@ fn main() -> AResult<()> {
             options,
             cmd,
         } => {
-            let new_update_key = read_jwk_file_opt(&new_update_key)
-                .context("Unable to read new update key for DID update")?;
-            let update_key = read_jwk_file_opt(&update_key)
-                .context("Unable to read update key for DID update")?;
-            let options = metadata_properties_to_value(options)
-                .context("Unable to parse options for DID update")?;
+            let new_update_key =
+                read_jwk_file_opt(&new_update_key).context("Read new update key for DID update")?;
+            let update_key =
+                read_jwk_file_opt(&update_key).context("Read update key for DID update")?;
+            let options =
+                metadata_properties_to_value(options).context("Parse options for DID update")?;
 
             let (did, method, operation) = match cmd {
                 DIDUpdateCmd::SetVerificationMethod {
@@ -1018,11 +1018,11 @@ fn main() -> AResult<()> {
                 } => {
                     let (method, did, id) = id_and_did
                         .parse()
-                        .context("Unable to parse id/DID for set-verification-method subcommand")?;
-                    let pk_enum = PublicKeyArgEnum::try_from(public_key)
-                        .context("Unable to read public key option")?;
-                    let public_key = PublicKeyProperty::try_from(pk_enum)
-                        .context("Unable to read public key property")?;
+                        .context("Parse id/DID for set-verification-method subcommand")?;
+                    let pk_enum =
+                        PublicKeyArgEnum::try_from(public_key).context("Read public key option")?;
+                    let public_key =
+                        PublicKeyProperty::try_from(pk_enum).context("Read public key property")?;
                     let purposes = verification_relationships.into();
                     let controller = controller.unwrap_or_else(|| did.clone());
                     let mut vmm = ssi::did::VerificationMethodMap {
@@ -1059,7 +1059,7 @@ fn main() -> AResult<()> {
                 } => {
                     let (method, did, id) = id_and_did
                         .parse()
-                        .context("Unable to parse id/DID for set-verification-method subcommand")?;
+                        .context("Parse id/DID for set-verification-method subcommand")?;
                     let service_endpoint = match endpoint.len() {
                         0 => None,
                         1 => endpoint.into_iter().next().map(OneOrMany::One),
@@ -1086,7 +1086,7 @@ fn main() -> AResult<()> {
                 DIDUpdateCmd::RemoveService(id_and_did) => {
                     let (method, did, id) = id_and_did
                         .parse()
-                        .context("Unable to parse id/DID for set-verification-method subcommand")?;
+                        .context("Parse id/DID for set-verification-method subcommand")?;
                     let op = DIDDocumentOperation::RemoveService(id);
                     (did, method, op)
                 }
@@ -1117,15 +1117,15 @@ fn main() -> AResult<()> {
                 .get_method(&did)
                 .map_err(|e| anyhow!("Unable to get DID method: {}", e))?;
             let new_verification_key = read_jwk_file_opt(&new_verification_key)
-                .context("Unable to read new signing key for DID recovery")?;
+                .context("Read new signing key for DID recovery")?;
             let new_update_key = read_jwk_file_opt(&new_update_key)
-                .context("Unable to read new update key for DID recovery")?;
+                .context("Read new update key for DID recovery")?;
             let new_recovery_key = read_jwk_file_opt(&new_recovery_key)
-                .context("Unable to read new recovery key for DID recovery")?;
-            let recovery_key = read_jwk_file_opt(&recovery_key)
-                .context("Unable to read recovery key for DID recovery")?;
-            let options = metadata_properties_to_value(options)
-                .context("Unable to parse options for DID recovery")?;
+                .context("Read new recovery key for DID recovery")?;
+            let recovery_key =
+                read_jwk_file_opt(&recovery_key).context("Read recovery key for DID recovery")?;
+            let options =
+                metadata_properties_to_value(options).context("Parse options for DID recovery")?;
 
             let tx = method
                 .recover(DIDRecover {
@@ -1146,9 +1146,9 @@ fn main() -> AResult<()> {
             let method = DID_METHODS
                 .get_method(&did)
                 .map_err(|e| anyhow!("Unable to get DID method: {}", e))?;
-            let key = read_jwk_file_opt(&key).context("Unable to read key for DID deactivation")?;
+            let key = read_jwk_file_opt(&key).context("Read key for DID deactivation")?;
             let options = metadata_properties_to_value(options)
-                .context("Unable to parse options for DID deactivation")?;
+                .context("Parse options for DID deactivation")?;
 
             let tx = method
                 .deactivate(DIDDeactivate {
