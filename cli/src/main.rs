@@ -1,9 +1,10 @@
+use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{stdin, stdout, BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use anyhow::{anyhow, Context, Result as AResult};
+use anyhow::{anyhow, bail, Context, Error as AError, Result as AResult};
 use chrono::prelude::*;
 use serde::Serialize;
 use serde_json::Value;
@@ -20,7 +21,7 @@ use didkit::{
     JWK, URI,
 };
 use didkit_cli::opts::ResolverOptions;
-use ssi::did::{Service, ServiceEndpoint, VerificationRelationship};
+use ssi::did::{DIDMethodTransaction, Service, ServiceEndpoint, VerificationRelationship};
 use ssi::one_or_many::OneOrMany;
 
 #[derive(StructOpt, Debug)]
@@ -95,6 +96,9 @@ pub enum DIDKit {
         /// More info: https://identity.foundation/did-registration/#options
         options: Vec<MetadataProperty>,
     },
+
+    /// Get DID from DID method transaction
+    DIDFromTx,
 
     /// Update a DID.
     DIDUpdate {
@@ -966,7 +970,7 @@ fn main() -> AResult<()> {
             let options = metadata_properties_to_value(options)
                 .context("Unable to parse options for DID Create")?;
 
-            let did = method
+            let tx = method
                 .create(DIDCreate {
                     recovery_key,
                     update_key,
@@ -974,6 +978,20 @@ fn main() -> AResult<()> {
                     options,
                 })
                 .context("DID Create failed")?;
+            let stdout_writer = BufWriter::new(stdout());
+            serde_json::to_writer_pretty(stdout_writer, &tx).unwrap();
+            println!("");
+        }
+
+        DIDKit::DIDFromTx => {
+            let stdin_reader = BufReader::new(stdin());
+            let tx: DIDMethodTransaction = serde_json::from_reader(stdin_reader).unwrap();
+            let method = DID_METHODS
+                .get(&tx.did_method)
+                .ok_or(anyhow!("Unable to get DID method"))?;
+            let did = method
+                .did_from_transaction(tx)
+                .context("Unable to get DID from transaction")?;
             println!("{}", did);
         }
 
@@ -1073,7 +1091,7 @@ fn main() -> AResult<()> {
                     (did, method, op)
                 }
             };
-            method
+            let tx = method
                 .update(DIDUpdate {
                     did: did.clone(),
                     update_key,
@@ -1082,7 +1100,9 @@ fn main() -> AResult<()> {
                     options,
                 })
                 .context("DID Update failed")?;
-            println!("Updated {}", did);
+            let stdout_writer = BufWriter::new(stdout());
+            serde_json::to_writer_pretty(stdout_writer, &tx).unwrap();
+            println!("");
         }
 
         DIDKit::DIDRecover {
@@ -1107,7 +1127,7 @@ fn main() -> AResult<()> {
             let options = metadata_properties_to_value(options)
                 .context("Unable to parse options for DID recovery")?;
 
-            method
+            let tx = method
                 .recover(DIDRecover {
                     did: did.clone(),
                     recovery_key,
@@ -1117,7 +1137,9 @@ fn main() -> AResult<()> {
                     options,
                 })
                 .context("DID Recover failed")?;
-            println!("Recovered {}", did);
+            let stdout_writer = BufWriter::new(stdout());
+            serde_json::to_writer_pretty(stdout_writer, &tx).unwrap();
+            println!("");
         }
 
         DIDKit::DIDDeactivate { did, key, options } => {
@@ -1128,14 +1150,16 @@ fn main() -> AResult<()> {
             let options = metadata_properties_to_value(options)
                 .context("Unable to parse options for DID deactivation")?;
 
-            method
+            let tx = method
                 .deactivate(DIDDeactivate {
                     did: did.clone(),
                     key,
                     options,
                 })
                 .context("DID deactivation failed")?;
-            println!("Deactivated {}", did);
+            let stdout_writer = BufWriter::new(stdout());
+            serde_json::to_writer_pretty(stdout_writer, &tx).unwrap();
+            println!("");
         }
 
         DIDKit::DIDResolve {
