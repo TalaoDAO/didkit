@@ -17,8 +17,8 @@ test -s v2.jwk || { didkit generate-secp256k1-key > v2.jwk; }
 #didkit did-update "$did" -R r1.jwk -r r2.jwk -v v2.jwk -u u2.jwk || true
 
 svc="$did#service-1"
-#didkit did-update -U u2.jwk -u u1.jwk set-service "$svc" -e http://localhost/ -t ExampleType || true
+didkit did-update -U u2.jwk -u u1.jwk set-service "$svc" -e http://localhost/ -t ExampleType || true
 didkit did-update -U u2.jwk -u u1.jwk set-service "$svc" -e {} -t ExampleType || true
-
+didkit did-update -U u2.jwk -u u1.jwk set-verification-method "$did#asdf" -t asdf --authentication -k v2.jwk
 
 #didkit did-deactivate "$did" -k r2.jwk || true

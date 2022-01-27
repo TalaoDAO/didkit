@@ -14,13 +14,13 @@ use did_method_key::DIDKey;
 use didkit::generate_proof;
 use didkit::{
     dereference, get_verification_method, runtime, DIDCreate, DIDDeactivate, DIDDocumentOperation,
-    DIDMethod, DIDRecover, DIDResolver, DIDUpdate, DereferencingInputMetadata, Document, Error,
+    DIDMethod, DIDRecover, DIDResolver, DIDUpdate, DereferencingInputMetadata, Error,
     LinkedDataProofOptions, Metadata, ProofFormat, ProofPurpose, ResolutionInputMetadata,
     ResolutionResult, Source, VerifiableCredential, VerifiablePresentation, DIDURL, DID_METHODS,
     JWK, URI,
 };
 use didkit_cli::opts::ResolverOptions;
-use ssi::did::{Service, ServiceEndpoint};
+use ssi::did::{Service, ServiceEndpoint, VerificationRelationship};
 use ssi::one_or_many::OneOrMany;
 
 #[derive(StructOpt, Debug)]
@@ -266,10 +266,10 @@ pub enum DIDKit {
 // Cannot put docstring here because it overwrites help text for did-update subcommands
 #[derive(StructOpt, Debug)]
 pub struct IdAndDid {
-    /// URI to add/remove/update in DID document
+    /// id (URI) of object to add/remove/update in DID document
     id: DIDURL,
 
-    /// DID whose DID document to update
+    /// DID whose DID document to update. Default: implied from <id>
     ///
     /// Defaults to the DID that is the prefix from the <id> argument.
     #[structopt(short, long)]
@@ -297,6 +297,60 @@ fn parse_service_endpoint(uri_or_object: &str) -> AResult<ServiceEndpoint> {
 }
 
 #[derive(StructOpt, Debug)]
+#[structopt(rename_all = "camelCase")]
+#[structopt(group = ArgGroup::with_name("verification_relationship").multiple(true).required(true))]
+pub struct VerificationRelationships {
+    /// Allow using this verification method for authentication
+    #[structopt(short = "U", long, group = "verification_relationship")]
+    pub authentication: bool,
+
+    /// Allow using this verification method for making assertions
+    #[structopt(short = "S", long, group = "verification_relationship")]
+    pub assertion_method: bool,
+
+    /// Allow using this verification method for key agreement
+    #[structopt(short = "K", long, group = "verification_relationship")]
+    pub key_agreement: bool,
+
+    /// Allow using this verification method for capability invocation
+    #[structopt(short = "I", long, group = "verification_relationship")]
+    pub capability_invocation: bool,
+
+    /// Allow using this verification method for capability delegation
+    #[structopt(short = "D", long, group = "verification_relationship")]
+    pub capability_delegation: bool,
+}
+
+impl From<VerificationRelationships> for Vec<VerificationRelationship> {
+    fn from(vrels: VerificationRelationships) -> Vec<VerificationRelationship> {
+        let mut vrels_vec = vec![];
+        let VerificationRelationships {
+            authentication,
+            assertion_method,
+            capability_invocation,
+            capability_delegation,
+            key_agreement,
+        } = vrels;
+        if authentication {
+            vrels_vec.push(VerificationRelationship::Authentication);
+        }
+        if assertion_method {
+            vrels_vec.push(VerificationRelationship::AssertionMethod);
+        }
+        if key_agreement {
+            vrels_vec.push(VerificationRelationship::KeyAgreement);
+        }
+        if capability_invocation {
+            vrels_vec.push(VerificationRelationship::CapabilityInvocation);
+        }
+        if capability_delegation {
+            vrels_vec.push(VerificationRelationship::CapabilityDelegation);
+        }
+        vrels_vec
+    }
+}
+
+#[derive(StructOpt, Debug)]
 pub enum DIDUpdateCmd {
     /// Add a verification method to the DID document
     SetVerificationMethod {
@@ -308,10 +362,16 @@ pub enum DIDUpdateCmd {
         type_: String,
 
         /// Verification method controller property
+        ///
+        /// Defaults to the DID this update is for (the <did> option)
+        #[structopt(short, long)]
         controller: Option<String>,
 
-        /// Public Key JWK
-        public_key_jwk: Option<PathBuf>,
+        #[structopt(flatten)]
+        verification_relationships: VerificationRelationships,
+
+        #[structopt(flatten)]
+        public_key: PublicKeyArg,
     },
 
     /// Add a service to the DID document
@@ -376,6 +436,102 @@ pub struct KeyArg {
     /// Request signature using SSH Agent
     #[structopt(short = "S", long, group = "key_group")]
     ssh_agent: bool,
+}
+
+#[derive(StructOpt, Debug)]
+#[structopt(group = ArgGroup::with_name("public_key_group").required(true))]
+#[structopt(rename_all = "camelCase")]
+pub struct PublicKeyArg {
+    /// Public key JSON Web Key (JWK)
+    #[structopt(short = "j", long, group = "public_key_group", parse(try_from_str = serde_json::from_str), name = "JWK")]
+    public_key_jwk: Option<JWK>,
+
+    /// Public key JWK read from file
+    #[structopt(short = "k", long, group = "public_key_group", name = "filename")]
+    public_key_jwk_path: Option<PathBuf>,
+
+    /// Multibase-encoded public key
+    #[structopt(short = "m", long, group = "public_key_group", name = "string")]
+    public_key_multibase: Option<String>,
+
+    /// Blockchain Account Id (CAIP-10)
+    #[structopt(short = "b", long, group = "public_key_group", name = "account")]
+    blockchain_account_id: Option<String>,
+}
+
+/// PublicKeyArg as an enum
+enum PublicKeyArgEnum {
+    PublicKeyJwk(JWK),
+    PublicKeyJwkPath(PathBuf),
+    PublicKeyMultibase(String),
+    BlockchainAccountId(String),
+}
+
+/// PublicKeyArgEnum after file reading.
+/// Suitable for use a verification method map.
+enum PublicKeyProperty {
+    JWK(JWK),
+    Multibase(String),
+    Account(String),
+}
+
+/// Convert from struct with options, to enum,
+/// until https://github.com/clap-rs/clap/issues/2621
+impl TryFrom<PublicKeyArg> for PublicKeyArgEnum {
+    type Error = AError;
+    fn try_from(pka: PublicKeyArg) -> AResult<PublicKeyArgEnum> {
+        Ok(match pka {
+            PublicKeyArg {
+                public_key_jwk_path: Some(path),
+                public_key_jwk: None,
+                public_key_multibase: None,
+                blockchain_account_id: None,
+            } => PublicKeyArgEnum::PublicKeyJwkPath(path),
+            PublicKeyArg {
+                public_key_jwk_path: None,
+                public_key_jwk: Some(jwk),
+                public_key_multibase: None,
+                blockchain_account_id: None,
+            } => PublicKeyArgEnum::PublicKeyJwk(jwk),
+            PublicKeyArg {
+                public_key_jwk_path: None,
+                public_key_jwk: None,
+                public_key_multibase: Some(mb),
+                blockchain_account_id: None,
+            } => PublicKeyArgEnum::PublicKeyMultibase(mb),
+            PublicKeyArg {
+                public_key_jwk_path: None,
+                public_key_jwk: None,
+                public_key_multibase: None,
+                blockchain_account_id: Some(account),
+            } => PublicKeyArgEnum::BlockchainAccountId(account),
+            PublicKeyArg {
+                public_key_jwk_path: None,
+                public_key_jwk: None,
+                public_key_multibase: None,
+                blockchain_account_id: None,
+            } => bail!("Missing public key option"),
+            _ => bail!("Only one public key option may be used"),
+        })
+    }
+}
+
+/// Convert public key option to a property for a verification method
+impl TryFrom<PublicKeyArgEnum> for PublicKeyProperty {
+    type Error = AError;
+    fn try_from(pka: PublicKeyArgEnum) -> AResult<PublicKeyProperty> {
+        Ok(match pka {
+            PublicKeyArgEnum::PublicKeyJwkPath(path) => {
+                let key_file = File::open(path).context("Unable to open JWK file")?;
+                let key_reader = BufReader::new(key_file);
+                let jwk = serde_json::from_reader(key_reader).context("Unable to read JWK file")?;
+                PublicKeyProperty::JWK(jwk)
+            }
+            PublicKeyArgEnum::PublicKeyJwk(jwk) => PublicKeyProperty::JWK(jwk),
+            PublicKeyArgEnum::PublicKeyMultibase(mb) => PublicKeyProperty::Multibase(mb),
+            PublicKeyArgEnum::BlockchainAccountId(account) => PublicKeyProperty::Account(account),
+        })
+    }
 }
 
 fn read_jwk_file_opt(pathbuf_opt: &Option<PathBuf>) -> AResult<Option<JWK>> {
@@ -839,22 +995,35 @@ fn main() -> AResult<()> {
                     id_and_did,
                     type_,
                     controller,
-                    public_key_jwk,
+                    public_key,
+                    verification_relationships,
                 } => {
-                    let public_key_jwk = read_jwk_file_opt(&public_key_jwk)
-                        .context("Unable to read public key JWK file")?;
                     let (method, did, id) = id_and_did
                         .parse()
                         .context("Unable to parse id/DID for set-verification-method subcommand")?;
-                    let purposes = vec![];
+                    let pk_enum = PublicKeyArgEnum::try_from(public_key)
+                        .context("Unable to read public key option")?;
+                    let public_key = PublicKeyProperty::try_from(pk_enum)
+                        .context("Unable to read public key property")?;
+                    let purposes = verification_relationships.into();
                     let controller = controller.unwrap_or_else(|| did.clone());
-                    let vmm = ssi::did::VerificationMethodMap {
+                    let mut vmm = ssi::did::VerificationMethodMap {
                         id: id.to_string(),
                         type_,
                         controller,
-                        public_key_jwk,
                         ..Default::default()
                     };
+                    match public_key {
+                        PublicKeyProperty::JWK(jwk) => vmm.public_key_jwk = Some(jwk),
+                        PublicKeyProperty::Multibase(mb) => {
+                            let mut ps = std::collections::BTreeMap::<String, Value>::default();
+                            ps.insert("publicKeyMultibase".to_string(), Value::String(mb));
+                            vmm.property_set = Some(ps);
+                        }
+                        PublicKeyProperty::Account(account) => {
+                            vmm.blockchain_account_id = Some(account);
+                        }
+                    }
                     let op = DIDDocumentOperation::SetVerificationMethod { vmm, purposes };
                     (did, method, op)
                 }
