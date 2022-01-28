@@ -38,6 +38,14 @@ pub enum DIDKit {
         #[structopt(flatten)]
         key: KeyArg,
     },
+
+    /// Compute a JWK thumbprint (RFC 7638)
+    #[structopt(setting = AppSettings::Hidden)]
+    JwkThumbprint {
+        #[structopt(flatten)]
+        key: KeyArg,
+    },
+
     /// Output a DID for a given JWK according to the provided DID method name or pattern
     ///
     /// Deterministically generate a DID from a public key JWK, for a DID method
@@ -704,6 +712,12 @@ fn main() -> AResult<()> {
             let jwk = JWK::generate_secp256k1().unwrap();
             let jwk_str = serde_json::to_string(&jwk).unwrap();
             println!("{}", jwk_str);
+        }
+
+        DIDKit::JwkThumbprint { key } => {
+            let jwk = key.get_jwk();
+            let thp = jwk.thumbprint().context("Compute JWK thumbprint")?;
+            println!("{}", thp);
         }
 
         DIDKit::KeyToDIDKey { key } => {
