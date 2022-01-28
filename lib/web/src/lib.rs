@@ -14,8 +14,8 @@ use didkit::ProofPreparation;
 use didkit::Source;
 use didkit::VerifiableCredential;
 use didkit::VerifiablePresentation;
-use didkit::DID_METHODS;
 use didkit::JWK;
+use didkit::{DIDMethod, DID_METHODS};
 use didkit::{Delegation, Invocation};
 use didkit::{JWTOrLDPOptions, ProofFormat, URI};
 
