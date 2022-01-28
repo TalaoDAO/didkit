@@ -98,7 +98,14 @@ pub enum DIDKit {
     },
 
     /// Get DID from DID method transaction
+    ///
+    /// Reads from standard input. Outputs DID on success.
     DIDFromTx,
+
+    /// Submit a DID method transaction
+    ///
+    /// Reads from standard input.
+    DIDSubmitTx,
 
     /// Update a DID.
     DIDUpdate {
@@ -993,6 +1000,20 @@ fn main() -> AResult<()> {
                 .did_from_transaction(tx)
                 .context("Get DID from transaction")?;
             println!("{}", did);
+        }
+
+        DIDKit::DIDSubmitTx => {
+            let stdin_reader = BufReader::new(stdin());
+            let tx: DIDMethodTransaction = serde_json::from_reader(stdin_reader).unwrap();
+            let method = DID_METHODS
+                .get(&tx.did_method)
+                .ok_or(anyhow!("Unable to get DID method"))?;
+            let result = rt
+                .block_on(method.submit_transaction(tx))
+                .context("Submit DID transaction")?;
+            let stdout_writer = BufWriter::new(stdout());
+            serde_json::to_writer_pretty(stdout_writer, &result).unwrap();
+            println!("");
         }
 
         DIDKit::DIDUpdate {

@@ -9,6 +9,8 @@ test -s v1.jwk || { didkit generate-secp256k1-key > v1.jwk; }
 didkit did-create ion -r r1.jwk -v s1.jwk -u u1.jwk > tx1-create.json
 did=$(didkit did-from-tx < tx1-create.json)
 
+DID_ION_API_URL=http://localhost:3000/ didkit did-submit-tx < tx1-create.json
+
 test -s r2.jwk || { didkit generate-secp256k1-key > r2.jwk; }
 test -s u2.jwk || { didkit generate-secp256k1-key > u2.jwk; }
 test -s v2.jwk || { didkit generate-secp256k1-key > v2.jwk; }
