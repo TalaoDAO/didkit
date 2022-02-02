@@ -543,10 +543,10 @@ impl TryFrom<PublicKeyArgEnum> for PublicKeyProperty {
             PublicKeyArgEnum::PublicKeyJwkPath(path) => {
                 let key_file = File::open(path).context("Open JWK file")?;
                 let key_reader = BufReader::new(key_file);
-                let jwk = serde_json::from_reader(key_reader).context("Read JWK file")?;
-                PublicKeyProperty::JWK(jwk)
+                let jwk: JWK = serde_json::from_reader(key_reader).context("Read JWK file")?;
+                PublicKeyProperty::JWK(jwk.to_public())
             }
-            PublicKeyArgEnum::PublicKeyJwk(jwk) => PublicKeyProperty::JWK(jwk),
+            PublicKeyArgEnum::PublicKeyJwk(jwk) => PublicKeyProperty::JWK(jwk.to_public()),
             PublicKeyArgEnum::PublicKeyMultibase(mb) => PublicKeyProperty::Multibase(mb),
             PublicKeyArgEnum::BlockchainAccountId(account) => PublicKeyProperty::Account(account),
         })
