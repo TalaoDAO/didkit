@@ -14,6 +14,3 @@ default-members = [
   "lib",
   "lib/cbindings",
 ]
-
-[dependencies]
-recrypt = {features = [ "wasm" ]}
